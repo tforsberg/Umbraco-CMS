@@ -96,6 +96,12 @@ namespace Umbraco.Core.Services
         IEnumerable<ITemplate> GetTemplates(params string[] aliases);
 
         /// <summary>
+        /// Gets a list of all <see cref="ITemplate"/> objects
+        /// </summary>
+        /// <returns>An enumerable list of <see cref="ITemplate"/> objects</returns>
+        IEnumerable<ITemplate> GetTemplates(int masterTemplateId);
+
+        /// <summary>
         /// Gets a <see cref="ITemplate"/> object by its alias
         /// </summary>
         /// <param name="alias">Alias of the template</param>
@@ -130,6 +136,8 @@ namespace Umbraco.Core.Services
         /// <param name="template"><see cref="ITemplate"/> to save</param>
         /// <param name="userId">Optional id of the user saving the template</param>
         void SaveTemplate(ITemplate template, int userId = 0);
+
+        ITemplate CreateTemplateWithIdentity(string name, string content, ITemplate masterTemplate = null, int userId = 0);
 
         /// <summary>
         /// Deletes a template by its alias

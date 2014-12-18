@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Remoting.Messaging;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
 using Umbraco.Core.Auditing;
@@ -12,6 +11,7 @@ using Umbraco.Core.IO;
 using Umbraco.Core.Logging;
 using Umbraco.Core.Models;
 using Umbraco.Core.Persistence;
+using Umbraco.Core.Persistence.Querying;
 using Umbraco.Core.Persistence.Repositories;
 using Umbraco.Core.Persistence.UnitOfWork;
 
@@ -238,6 +238,21 @@ namespace Umbraco.Core.Services
 
 
         #region Templates
+
+        public ITemplate CreateTemplateWithIdentity(string name, string content, ITemplate masterTemplate = null, int userId = 0)
+        {
+            var template = new Template(name, name)
+            {
+                Content = content
+            };
+            if (masterTemplate != null)
+            {
+                template.SetMasterTemplate(masterTemplate);
+            }
+            SaveTemplate(template, userId);
+            return template;
+        }
+
         /// <summary>
         /// Gets a list of all <see cref="ITemplate"/> objects
         /// </summary>
@@ -246,7 +261,19 @@ namespace Umbraco.Core.Services
         {
             using (var repository = _repositoryFactory.CreateTemplateRepository(_dataUowProvider.GetUnitOfWork()))
             {
-                return repository.GetAll(aliases);
+                return repository.GetAll(aliases).OrderBy(x => x.Name);
+            }
+        }
+
+        /// <summary>
+        /// Gets a list of all <see cref="ITemplate"/> objects
+        /// </summary>
+        /// <returns>An enumerable list of <see cref="ITemplate"/> objects</returns>
+        public IEnumerable<ITemplate> GetTemplates(int masterTemplateId)
+        {
+            using (var repository = _repositoryFactory.CreateTemplateRepository(_dataUowProvider.GetUnitOfWork()))
+            {
+                return repository.GetChildren(masterTemplateId).OrderBy(x => x.Name);
             }
         }
 
@@ -794,5 +821,8 @@ namespace Umbraco.Core.Services
 
         #endregion
 
+
+
+        
     }
 }

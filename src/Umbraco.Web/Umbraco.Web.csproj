@@ -503,11 +503,13 @@
     <Compile Include="Trees\CoreTreeAttribute.cs" />
     <Compile Include="Trees\DataTypeTreeController.cs" />
     <Compile Include="Trees\FileSystemTreeController.cs" />
+    <Compile Include="Trees\LanguageTreeController.cs" />
     <Compile Include="Trees\LegacyBaseTreeAttribute.cs" />
     <Compile Include="Trees\MemberTreeController.cs" />
     <Compile Include="Trees\MenuRenderingEventArgs.cs" />
     <Compile Include="Models\Trees\CreateChildEntity.cs" />
     <Compile Include="Models\Trees\MenuItemList.cs" />
+    <Compile Include="Trees\TemplatesTreeController.cs" />
     <Compile Include="Trees\TreeControllerBase.cs" />
     <Compile Include="CanvasDesignerUtility.cs" />
     <Compile Include="UI\JavaScript\AssetInitialization.cs" />

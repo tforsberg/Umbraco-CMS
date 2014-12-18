@@ -2,14 +2,17 @@
 using System.IO;
 using System.Linq;
 using System.Text;
+using Moq;
 using NUnit.Framework;
 using Umbraco.Core;
+using Umbraco.Core.Configuration.UmbracoSettings;
 using Umbraco.Core.IO;
 using Umbraco.Core.Models;
 using Umbraco.Core.Persistence;
 using Umbraco.Core.Persistence.Caching;
 using Umbraco.Core.Persistence.Repositories;
 using Umbraco.Core.Persistence.UnitOfWork;
+using Umbraco.Core.Services;
 using Umbraco.Tests.TestHelpers;
 using Umbraco.Tests.TestHelpers.Entities;
 
@@ -56,7 +59,8 @@ namespace Umbraco.Tests.Persistence.Repositories
             var unitOfWork = provider.GetUnitOfWork();
 
             // Act
-            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem))
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
             {
 
                 // Assert
@@ -66,15 +70,21 @@ namespace Umbraco.Tests.Persistence.Repositories
         }
 
         [Test]
-        public void Can_Perform_Add_MasterPage()
+        public void Can_Perform_Add_MasterPage_Detect_Content()
         {
             // Arrange
             var provider = new PetaPocoUnitOfWorkProvider();
             var unitOfWork = provider.GetUnitOfWork();
-            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem))
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
             {
                 // Act
-                var template = new Template("test-add-masterpage.master", "test", "test") { Content = @"<%@ Master Language=""C#"" %>" };
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, 
+                    //even though the default is MVC, the content is not 
+                    Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
                 repository.AddOrUpdate(template);
                 unitOfWork.Commit();
 
@@ -86,15 +96,222 @@ namespace Umbraco.Tests.Persistence.Repositories
         }
 
         [Test]
+        public void Can_Perform_Add_MasterPage_With_Default_Content()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                // Act
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.WebForms));
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                //Assert
+                Assert.That(repository.Get("test"), Is.Not.Null);
+                Assert.That(_masterPageFileSystem.FileExists("test.master"), Is.True);
+                Assert.AreEqual(@"<%@ Master Language=""C#"" MasterPageFile=""~/umbraco/masterpages/default.master"" AutoEventWireup=""true"" %>
+
+<asp:Content ContentPlaceHolderID=""ContentPlaceHolderDefault"" runat=""server"">
+
+</asp:Content>
+", template.Content);
+            }
+
+        }
+
+        [Test]
+        public void Can_Perform_Add_MasterPage_With_Default_Content_With_Parent()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                //NOTE: This has to be persisted first
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.WebForms));
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                // Act
+                var template2 = new Template("test2", "test2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.WebForms));
+                template2.SetMasterTemplate(template);                
+                repository.AddOrUpdate(template2);
+                unitOfWork.Commit();
+
+                //Assert
+                Assert.That(repository.Get("test2"), Is.Not.Null);
+                Assert.That(_masterPageFileSystem.FileExists("test2.master"), Is.True);
+                Assert.AreEqual(@"<%@ Master Language=""C#"" MasterPageFile=""~/masterpages/test.master"" AutoEventWireup=""true"" %>
+
+", template2.Content);
+            }
+
+        }
+
+        [Test]
+        public void Can_Perform_Add_View()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                // Act
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                //Assert
+                Assert.That(repository.Get("test"), Is.Not.Null);
+                Assert.That(_viewsFileSystem.FileExists("test.cshtml"), Is.True);
+            }
+
+        }
+
+        [Test]
+        public void Can_Perform_Add_View_With_Default_Content()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                // Act
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = ViewHelper.GetDefaultFileContent()
+                };
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                //Assert
+                Assert.That(repository.Get("test"), Is.Not.Null);
+                Assert.That(_viewsFileSystem.FileExists("test.cshtml"), Is.True);
+                Assert.AreEqual(@"@inherits Umbraco.Web.Mvc.UmbracoTemplatePage
+@{
+    Layout = null;
+}", template.Content);
+            }
+
+        }
+
+        [Test]
+        public void Can_Perform_Add_View_With_Default_Content_With_Parent()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                //NOTE: This has to be persisted first
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                // Act
+                var template2 = new Template("test2", "test2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                template2.SetMasterTemplate(template);
+                repository.AddOrUpdate(template2);
+                unitOfWork.Commit();
+
+                //Assert
+                Assert.That(repository.Get("test2"), Is.Not.Null);
+                Assert.That(_viewsFileSystem.FileExists("test2.cshtml"), Is.True);
+                Assert.AreEqual(@"@inherits Umbraco.Web.Mvc.UmbracoTemplatePage
+@{
+    Layout = ""test.cshtml"";
+}", template2.Content);
+            }
+
+        }
+
+        [Test]
+        public void Can_Perform_Add_Unique_Alias()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem, 
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                // Act
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = ViewHelper.GetDefaultFileContent()
+                };
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                var template2 = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = ViewHelper.GetDefaultFileContent()
+                };
+                repository.AddOrUpdate(template2);
+                unitOfWork.Commit();
+
+                //Assert
+                Assert.AreEqual("test1", template2.Alias);
+            }
+
+        }
+
+        [Test]
+        public void Can_Perform_Update_Unique_Alias()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                // Act
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = ViewHelper.GetDefaultFileContent()
+                };
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                var template2 = new Template("test1", "test1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = ViewHelper.GetDefaultFileContent()
+                };
+                repository.AddOrUpdate(template2);
+                unitOfWork.Commit();
+
+                template.Alias = "test1";
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                //Assert
+                Assert.AreEqual("test11", template.Alias);
+                Assert.That(_viewsFileSystem.FileExists("test11.cshtml"), Is.True);
+                Assert.That(_viewsFileSystem.FileExists("test.cshtml"), Is.False);
+            }
+
+        }
+
+        [Test]
         public void Can_Perform_Update_MasterPage()
         {
             // Arrange
             var provider = new PetaPocoUnitOfWorkProvider();
             var unitOfWork = provider.GetUnitOfWork();
-            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem))
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
             {
                 // Act
-                var template = new Template("test-updated-masterpage.master", "test", "test") { Content = @"<%@ Master Language=""C#"" %>" };
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
                 repository.AddOrUpdate(template);
                 unitOfWork.Commit();
 
@@ -113,27 +330,94 @@ namespace Umbraco.Tests.Persistence.Repositories
         }
 
         [Test]
-        public void Can_Perform_Delete()
+        public void Can_Perform_Update_View()
         {
             // Arrange
             var provider = new PetaPocoUnitOfWorkProvider();
             var unitOfWork = provider.GetUnitOfWork();
-            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem))
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
             {
-                var template = new Template("test-add-masterpage.master", "test", "test") { Content = @"<%@ Master Language=""C#"" %>" };
+                // Act
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = ViewHelper.GetDefaultFileContent()
+                };
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                template.Content += "<html></html>";
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                var updated = repository.Get("test");
+
+                // Assert
+                Assert.That(_viewsFileSystem.FileExists("test.cshtml"), Is.True);
+                Assert.That(updated.Content, Is.EqualTo(ViewHelper.GetDefaultFileContent() + "<html></html>"));
+            }
+
+
+        }
+
+        [Test]
+        public void Can_Perform_Delete_MasterPage()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
                 repository.AddOrUpdate(template);
                 unitOfWork.Commit();
 
                 // Act
                 var templates = repository.Get("test");
+                Assert.That(_masterPageFileSystem.FileExists("test.master"), Is.True);
                 repository.Delete(templates);
                 unitOfWork.Commit();
 
                 // Assert
                 Assert.IsNull(repository.Get("test"));
+                Assert.That(_masterPageFileSystem.FileExists("test.master"), Is.False);
             }
 
            
+        }
+
+        [Test]
+        public void Can_Perform_Delete_View()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = ViewHelper.GetDefaultFileContent()
+                };
+                repository.AddOrUpdate(template);
+                unitOfWork.Commit();
+
+                // Act
+                var templates = repository.Get("test");
+                Assert.That(_viewsFileSystem.FileExists("test.cshtml"), Is.True);
+                repository.Delete(templates);
+                unitOfWork.Commit();
+
+                // Assert
+                Assert.IsNull(repository.Get("test"));
+                Assert.That(_viewsFileSystem.FileExists("test.cshtml"), Is.False);
+            }
+
+
         }
 
         [Test]
@@ -156,9 +440,13 @@ namespace Umbraco.Tests.Persistence.Repositories
                 contentRepo.AddOrUpdate(textpage);
                 unitOfWork.Commit();
 
-                using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem))
+                using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
                 {
-                    var template = new Template("test-add-masterpage.master", "test", "test") { Content = @"<%@ Master Language=""C#"" %>" };
+                    var template = new Template("test", "test", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                    {
+                        Content = @"<%@ Master Language=""C#"" %>"
+                    };
                     repository.AddOrUpdate(template);
                     unitOfWork.Commit();
 
@@ -184,11 +472,21 @@ namespace Umbraco.Tests.Persistence.Repositories
             // Arrange
             var provider = new PetaPocoUnitOfWorkProvider();
             var unitOfWork = provider.GetUnitOfWork();
-            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem))
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
             {
-                var parent = new Template("test-parent-masterpage.master", "parent", "parent") { Content = @"<%@ Master Language=""C#"" %>" };
-                var child = new Template("test-child-masterpage.master", "child", "child") { Content = @"<%@ Master Language=""C#"" %>" };
-                var baby = new Template("test-baby-masterpage.master", "baby", "baby") { Content = @"<%@ Master Language=""C#"" %>" };
+                var parent = new Template("parent", "parent", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
+                var child = new Template("child", "child", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
+                var baby = new Template("baby", "baby", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
                 child.MasterTemplateAlias = parent.Alias;
                 child.MasterTemplateId = new Lazy<int>(() => parent.Id);
                 baby.MasterTemplateAlias = child.Alias;
@@ -216,19 +514,47 @@ namespace Umbraco.Tests.Persistence.Repositories
             // Arrange
             var provider = new PetaPocoUnitOfWorkProvider();
             var unitOfWork = provider.GetUnitOfWork();
-            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem))
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
             {
-                var parent = new Template("test-parent-masterpage.master", "parent", "parent") { Content = @"<%@ Master Language=""C#"" %>" };
+                var parent = new Template("parent", "parent", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
 
-                var child1 = new Template("test-child1-masterpage.master", "child1", "child1") { Content = @"<%@ Master Language=""C#"" %>" };
-                var toddler1 = new Template("test-toddler1-masterpage.master", "toddler1", "toddler1") { Content = @"<%@ Master Language=""C#"" %>" };
-                var toddler2 = new Template("test-toddler2-masterpage.master", "toddler2", "toddler2") { Content = @"<%@ Master Language=""C#"" %>" };
-                var baby1 = new Template("test-baby1-masterpage.master", "baby1", "baby1") { Content = @"<%@ Master Language=""C#"" %>" };
+                var child1 = new Template("child1", "child1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
+                var toddler1 = new Template("toddler1", "toddler1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
+                var toddler2 = new Template("toddler2", "toddler2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
+                var baby1 = new Template("baby1", "baby1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
 
-                var child2 = new Template("test-child2-masterpage.master", "child2", "child2") { Content = @"<%@ Master Language=""C#"" %>" };
-                var toddler3 = new Template("test-toddler3-masterpage.master", "toddler3", "toddler3") { Content = @"<%@ Master Language=""C#"" %>" };
-                var toddler4 = new Template("test-toddler4-masterpage.master", "toddler4", "toddler4") { Content = @"<%@ Master Language=""C#"" %>" };
-                var baby2 = new Template("test-baby2-masterpage.master", "baby2", "baby2") { Content = @"<%@ Master Language=""C#"" %>" };
+                var child2 = new Template("child2", "child2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
+                var toddler3 = new Template("toddler3", "toddler3", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
+                var toddler4 = new Template("toddler4", "toddler4", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
+                var baby2 = new Template("baby2", "baby2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc))
+                {
+                    Content = @"<%@ Master Language=""C#"" %>"
+                };
 
 
                 child1.MasterTemplateAlias = parent.Alias;
@@ -281,89 +607,113 @@ namespace Umbraco.Tests.Persistence.Repositories
             
         }
 
-        //[Test]
-        //public void Can_Perform_Get_On_ScriptRepository()
-        //{
-        //    // Arrange
-        //    var provider = new FileUnitOfWorkProvider();
-        //    var unitOfWork = provider.GetUnitOfWork();
-        //    var repository = new ScriptRepository(unitOfWork, _masterPageFileSystem);
+        [Test]
+        public void Path_Is_Set_Correctly_On_Creation()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                var parent = new Template("parent", "parent", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var child1 = new Template("child1", "child1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var toddler1 = new Template("toddler1", "toddler1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var toddler2 = new Template("toddler2", "toddler2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var baby1 = new Template("baby1", "baby1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var child2 = new Template("child2", "child2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var toddler3 = new Template("toddler3", "toddler3", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var toddler4 = new Template("toddler4", "toddler4", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var baby2 = new Template("baby2", "baby2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
 
-        //    // Act
-        //    var exists = repository.Get("test-script.js");
+                child1.MasterTemplateAlias = parent.Alias;
+                child1.MasterTemplateId = new Lazy<int>(() => parent.Id);
+                child2.MasterTemplateAlias = parent.Alias;
+                child2.MasterTemplateId = new Lazy<int>(() => parent.Id);
+                toddler1.MasterTemplateAlias = child1.Alias;
+                toddler1.MasterTemplateId = new Lazy<int>(() => child1.Id);
+                toddler2.MasterTemplateAlias = child1.Alias;
+                toddler2.MasterTemplateId = new Lazy<int>(() => child1.Id);
+                toddler3.MasterTemplateAlias = child2.Alias;
+                toddler3.MasterTemplateId = new Lazy<int>(() => child2.Id);
+                toddler4.MasterTemplateAlias = child2.Alias;
+                toddler4.MasterTemplateId = new Lazy<int>(() => child2.Id);
+                baby1.MasterTemplateAlias = toddler2.Alias;
+                baby1.MasterTemplateId = new Lazy<int>(() => toddler2.Id);
+                baby2.MasterTemplateAlias = toddler4.Alias;
+                baby2.MasterTemplateId = new Lazy<int>(() => toddler4.Id);
+                
 
-        //    // Assert
-        //    Assert.That(exists, Is.Not.Null);
-        //    Assert.That(exists.Alias, Is.EqualTo("test-script"));
-        //    Assert.That(exists.Name, Is.EqualTo("test-script.js"));
-        //}
+                // Act
+                repository.AddOrUpdate(parent);
+                repository.AddOrUpdate(child1);
+                repository.AddOrUpdate(child2);
+                repository.AddOrUpdate(toddler1);
+                repository.AddOrUpdate(toddler2);
+                repository.AddOrUpdate(toddler3);
+                repository.AddOrUpdate(toddler4);
+                repository.AddOrUpdate(baby1);
+                repository.AddOrUpdate(baby2);
+                unitOfWork.Commit();
 
-        //[Test]
-        //public void Can_Perform_GetAll_On_ScriptRepository()
-        //{
-        //    // Arrange
-        //    var provider = new FileUnitOfWorkProvider();
-        //    var unitOfWork = provider.GetUnitOfWork();
-        //    var repository = new ScriptRepository(unitOfWork, _masterPageFileSystem);
+                // Assert
+                Assert.AreEqual(string.Format("-1,{0}", parent.Id), parent.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1}", parent.Id, child1.Id), child1.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1}", parent.Id, child2.Id), child2.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1}", parent.Id, child2.Id), child2.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1},{2}", parent.Id, child1.Id, toddler1.Id), toddler1.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1},{2}", parent.Id, child1.Id, toddler2.Id), toddler2.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1},{2}", parent.Id, child2.Id, toddler3.Id), toddler3.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1},{2}", parent.Id, child2.Id, toddler4.Id), toddler4.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1},{2},{3}", parent.Id, child1.Id, toddler2.Id, baby1.Id), baby1.Path);
+                Assert.AreEqual(string.Format("-1,{0},{1},{2},{3}", parent.Id, child2.Id, toddler4.Id, baby2.Id), baby2.Path);
+            }
 
-        //    var script = new Script("test-script1.js") { Content = "/// <reference name=\"MicrosoftAjax.js\"/>" };
-        //    repository.AddOrUpdate(script);
-        //    var script2 = new Script("test-script2.js") { Content = "/// <reference name=\"MicrosoftAjax.js\"/>" };
-        //    repository.AddOrUpdate(script2);
-        //    var script3 = new Script("test-script3.js") { Content = "/// <reference name=\"MicrosoftAjax.js\"/>" };
-        //    repository.AddOrUpdate(script3);
-        //    unitOfWork.Commit();
 
-        //    // Act
-        //    var scripts = repository.GetAll();
+        }
 
-        //    // Assert
-        //    Assert.That(scripts, Is.Not.Null);
-        //    Assert.That(scripts.Any(), Is.True);
-        //    Assert.That(scripts.Any(x => x == null), Is.False);
-        //    Assert.That(scripts.Count(), Is.EqualTo(4));
-        //}
+        [Test]
+        public void Path_Is_Set_Correctly_On_Update()
+        {
+            // Arrange
+            var provider = new PetaPocoUnitOfWorkProvider();
+            var unitOfWork = provider.GetUnitOfWork();
+            using (var repository = new TemplateRepository(unitOfWork, NullCacheProvider.Current, _masterPageFileSystem, _viewsFileSystem,
+                Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc)))
+            {
+                var parent = new Template("parent", "parent", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var child1 = new Template("child1", "child1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var child2 = new Template("child2", "child2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var toddler1 = new Template("toddler1", "toddler1", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
+                var toddler2 = new Template("toddler2", "toddler2", _viewsFileSystem, _masterPageFileSystem, Mock.Of<ITemplatesSection>(t => t.DefaultRenderingEngine == RenderingEngine.Mvc));
 
-        //[Test]
-        //public void Can_Perform_GetAll_With_Params_On_ScriptRepository()
-        //{
-        //    // Arrange
-        //    var provider = new FileUnitOfWorkProvider();
-        //    var unitOfWork = provider.GetUnitOfWork();
-        //    var repository = new ScriptRepository(unitOfWork, _masterPageFileSystem);
+                child1.MasterTemplateAlias = parent.Alias;
+                child1.MasterTemplateId = new Lazy<int>(() => parent.Id);
+                child2.MasterTemplateAlias = parent.Alias;
+                child2.MasterTemplateId = new Lazy<int>(() => parent.Id);
+                toddler1.MasterTemplateAlias = child1.Alias;
+                toddler1.MasterTemplateId = new Lazy<int>(() => child1.Id);
+                toddler2.MasterTemplateAlias = child1.Alias;
+                toddler2.MasterTemplateId = new Lazy<int>(() => child1.Id);
 
-        //    var script = new Script("test-script1.js") { Content = "/// <reference name=\"MicrosoftAjax.js\"/>" };
-        //    repository.AddOrUpdate(script);
-        //    var script2 = new Script("test-script2.js") { Content = "/// <reference name=\"MicrosoftAjax.js\"/>" };
-        //    repository.AddOrUpdate(script2);
-        //    var script3 = new Script("test-script3.js") { Content = "/// <reference name=\"MicrosoftAjax.js\"/>" };
-        //    repository.AddOrUpdate(script3);
-        //    unitOfWork.Commit();
+                repository.AddOrUpdate(parent);
+                repository.AddOrUpdate(child1);
+                repository.AddOrUpdate(child2);
+                repository.AddOrUpdate(toddler1);
+                repository.AddOrUpdate(toddler2);
+                unitOfWork.Commit();
 
-        //    // Act
-        //    var scripts = repository.GetAll("test-script1.js", "test-script2.js");
+                //Act
+                toddler2.SetMasterTemplate(child2);
+                repository.AddOrUpdate(toddler2);
+                unitOfWork.Commit();
 
-        //    // Assert
-        //    Assert.That(scripts, Is.Not.Null);
-        //    Assert.That(scripts.Any(), Is.True);
-        //    Assert.That(scripts.Any(x => x == null), Is.False);
-        //    Assert.That(scripts.Count(), Is.EqualTo(2));
-        //}
+                //Assert
+                Assert.AreEqual(string.Format("-1,{0},{1},{2}", parent.Id, child2.Id, toddler2.Id), toddler2.Path);
 
-        //[Test]
-        //public void Can_Perform_Exists_On_ScriptRepository()
-        //{
-        //    // Arrange
-        //    var provider = new FileUnitOfWorkProvider();
-        //    var unitOfWork = provider.GetUnitOfWork();
-        //    var repository = new ScriptRepository(unitOfWork, _masterPageFileSystem);
+            }
+        }
 
-        //    // Act
-        //    var exists = repository.Exists("test-script.js");
-
-        //    // Assert
-        //    Assert.That(exists, Is.True);
-        //}
 
         [TearDown]
         public override void TearDown()

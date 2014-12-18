@@ -394,6 +394,7 @@
     <Compile Include="Persistence\Mappers\TagMapper.cs" />
     <Compile Include="Persistence\Mappers\TemplateMapper.cs" />
     <Compile Include="Persistence\Migrations\DataLossException.cs" />
+    <Compile Include="Persistence\Migrations\Upgrades\TargetVersionSevenThreeZero\RemoveTemplateMasterColumn.cs" />
     <Compile Include="Persistence\Migrations\Upgrades\TargetVersionSevenTwoZero\AddMissingForeignKeyForContentType.cs" />
     <Compile Include="Persistence\Migrations\Upgrades\TargetVersionSevenTwoZero\AlterDataTypePreValueTable.cs" />
     <Compile Include="Persistence\Migrations\Upgrades\TargetVersionSevenOneZero\AssignMissingPrimaryForMySqlKeys.cs" />
@@ -616,7 +617,6 @@
     <Compile Include="Persistence\Factories\DataTypeDefinitionFactory.cs" />
     <Compile Include="Persistence\Factories\DictionaryItemFactory.cs" />
     <Compile Include="Persistence\Factories\DictionaryTranslationFactory.cs" />
-    <Compile Include="Persistence\Factories\IEntityFactory.cs" />
     <Compile Include="Persistence\Factories\LanguageFactory.cs" />
     <Compile Include="Persistence\Factories\MediaFactory.cs" />
     <Compile Include="Persistence\Factories\MediaTypeFactory.cs" />
@@ -1077,6 +1077,7 @@
     <Compile Include="Services\LocalizedTextServiceExtensions.cs" />
     <Compile Include="Services\LocalizedTextServiceFileSources.cs" />
     <Compile Include="Services\MacroService.cs" />
+    <Compile Include="IO\MasterPageHelper.cs" />
     <Compile Include="Services\MediaService.cs" />
     <Compile Include="Models\Membership\MemberCountType.cs" />
     <Compile Include="Services\MemberGroupService.cs" />
@@ -1093,6 +1094,7 @@
     <Compile Include="Services\TagService.cs" />
     <Compile Include="Services\UserService.cs" />
     <Compile Include="Services\UserServiceExtensions.cs" />
+    <Compile Include="IO\ViewHelper.cs" />
     <Compile Include="Standalone\ServiceContextManager.cs" />
     <Compile Include="Standalone\StandaloneCoreApplication.cs" />
     <Compile Include="Standalone\StandaloneCoreBootManager.cs" />
