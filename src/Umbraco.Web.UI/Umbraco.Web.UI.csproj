@@ -1667,7 +1667,9 @@
     <Content Include="Umbraco_Client\Installer\Js\jquery.1.4.4.js" />
     <Content Include="Umbraco_Client\Installer\Js\jquery.main.js" />
     <Content Include="Umbraco_Client\Installer\Js\jquery.ui.selectmenu.js" />
-    <Content Include="Umbraco\Config\Lang\ko.xml" />
+    <Content Include="Umbraco\Config\Lang\ko.xml">
+      <SubType>Designer</SubType>
+    </Content>
     <Content Include="Umbraco\Dashboard\FeedProxy.aspx" />
     <Content Include="Umbraco\Developer\Packages\StarterKits.aspx" />
     <Content Include="Umbraco\helpRedirect.aspx" />
@@ -2551,7 +2553,7 @@ xcopy "$(ProjectDir)"..\packages\SqlServerCE.4.0.0.0\x86\*.* "$(TargetDir)x86\" 
           <AutoAssignPort>True</AutoAssignPort>
           <DevelopmentServerPort>7210</DevelopmentServerPort>
           <DevelopmentServerVPath>/</DevelopmentServerVPath>
-          <IISUrl>http://localhost:7210</IISUrl>
+          <IISUrl>http://localhost:7300</IISUrl>
           <NTLMAuthentication>False</NTLMAuthentication>
           <UseCustomServer>False</UseCustomServer>
           <CustomServerUrl>

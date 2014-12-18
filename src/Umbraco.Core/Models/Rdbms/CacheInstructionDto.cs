@@ -11,7 +11,7 @@ namespace Umbraco.Core.Models.Rdbms
     {
         [Column("id")]
         [NullSetting(NullSetting = NullSettings.NotNull)]
-        [PrimaryKeyColumn(AutoIncrement = true)]
+        [PrimaryKeyColumn(AutoIncrement = true, Name = "PK_umbracoCacheInstruction")]
         public int Id { get; set; }
 
         [Column("utcStamp")]

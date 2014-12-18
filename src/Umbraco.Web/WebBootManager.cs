@@ -49,7 +49,7 @@ namespace Umbraco.Web
     {
         private readonly bool _isForTesting;
         //NOTE: see the Initialize method for what this is used for
-        private List<IIndexer> _indexesToRebuild = new List<IIndexer>(); 
+        private readonly List<IIndexer> _indexesToRebuild = new List<IIndexer>(); 
 
         public WebBootManager(UmbracoApplicationBase umbracoApplication)
             : this(umbracoApplication, false)
@@ -322,6 +322,7 @@ namespace Umbraco.Web
 
             //Override the ServerMessengerResolver to set a username/password for the distributed calls
             ServerMessengerResolver.Current.SetServerMessenger(new BatchedDatabaseServerMessenger(UmbracoConfig.For.UmbracoSettings().DistributedCall.Enabled));
+
             //ServerMessengerResolver.Current.SetServerMessenger(new DatabaseServerMessenger(UmbracoConfig.For.UmbracoSettings().DistributedCall.Enabled));
             //ServerMessengerResolver.Current.SetServerMessenger(new BatchedServerMessenger(() =>
             //{
