@@ -46,26 +46,16 @@ namespace Umbraco.Web
                 return;
             }
 
-            var items = HttpContext.Current.Items[typeof(BatchedServerMessenger).Name] as List<Message>;
+            var items = HttpContext.Current.Items[typeof(BatchedServerMessenger).Name] as List<DistributedMessage>;
             if (items != null)
             {
-                var copied = new Message[items.Count];
+                var copied = new DistributedMessage[items.Count];
                 items.CopyTo(copied);
                 //now set to null so it get's cleaned up on this request
                 HttpContext.Current.Items[typeof (BatchedServerMessenger).Name] = null;
 
                 SendMessages(copied);
             }
-        }
-
-        private class Message
-        {
-            public IEnumerable<IServerAddress> Servers { get; set; }
-            public ICacheRefresher Refresher { get; set; }
-            public MessageType DispatchType { get; set; }
-            public IEnumerable<object> Ids { get; set; }
-            public Type IdArrayType { get; set; }
-            public string JsonPayload { get; set; }
         }
 
         /// <summary>
@@ -123,11 +113,11 @@ namespace Umbraco.Web
 
             if (UmbracoContext.Current.HttpContext.Items[typeof(BatchedServerMessenger).Name] == null)
             {
-                UmbracoContext.Current.HttpContext.Items[typeof(BatchedServerMessenger).Name] = new List<Message>();
+                UmbracoContext.Current.HttpContext.Items[typeof(BatchedServerMessenger).Name] = new List<DistributedMessage>();
             }
-            var list = (List<Message>)UmbracoContext.Current.HttpContext.Items[typeof(BatchedServerMessenger).Name];
+            var list = (List<DistributedMessage>)UmbracoContext.Current.HttpContext.Items[typeof(BatchedServerMessenger).Name];
 
-            list.Add(new Message
+            list.Add(new DistributedMessage
             {
                 DispatchType = dispatchType,
                 IdArrayType = idArrayType,
@@ -138,79 +128,15 @@ namespace Umbraco.Web
             });
         }
 
-        private RefreshInstruction[] ConvertToInstruction(Message msg)
+        
+
+        private void SendMessages(IEnumerable<DistributedMessage> messages)
         {
-            switch (msg.DispatchType)
-            {
-                case MessageType.RefreshAll:
-                    return new[]
-                        {
-                            new RefreshInstruction
-                            {
-                                RefreshType = RefreshInstruction.RefreshMethodType.RefreshAll,
-                                RefresherId = msg.Refresher.UniqueIdentifier
-                            }
-                        };
-                case MessageType.RefreshById:
-                    if (msg.IdArrayType == null)
-                    {
-                        throw new InvalidOperationException("Cannot refresh by id if the idArrayType is null");
-                    }
-
-                    if (msg.IdArrayType == typeof(int))
-                    {
-                        var serializer = new JavaScriptSerializer();
-                        var jsonIds = serializer.Serialize(msg.Ids.Cast<int>().ToArray());
-
-                        return new[]
-                        {
-                            new RefreshInstruction
-                            {
-                                JsonIds = jsonIds,
-                                RefreshType = RefreshInstruction.RefreshMethodType.RefreshByIds,
-                                RefresherId = msg.Refresher.UniqueIdentifier
-                            }
-                        };
-                    }
-
-                    return msg.Ids.Select(x => new RefreshInstruction
-                    {
-                        GuidId = (Guid)x,
-                        RefreshType = RefreshInstruction.RefreshMethodType.RefreshById,
-                        RefresherId = msg.Refresher.UniqueIdentifier
-                    }).ToArray();
-
-                case MessageType.RefreshByJson:
-                    return new[]
-                        {
-                            new RefreshInstruction
-                            {
-                                RefreshType = RefreshInstruction.RefreshMethodType.RefreshByJson,
-                                RefresherId = msg.Refresher.UniqueIdentifier,
-                                JsonPayload = msg.JsonPayload
-                            }
-                        };
-                case MessageType.RemoveById:
-                    return msg.Ids.Select(x => new RefreshInstruction
-                    {
-                        IntId = (int)x,
-                        RefreshType = RefreshInstruction.RefreshMethodType.RemoveById,
-                        RefresherId = msg.Refresher.UniqueIdentifier
-                    }).ToArray();
-                case MessageType.RefreshByInstance:                    
-                case MessageType.RemoveByInstance:
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-        }
-
-        private void SendMessages(IEnumerable<Message> messages)
-        {
-            var batchedMsg = new List<Tuple<Message, RefreshInstruction[]>>();
+            var batchedMsg = new List<Tuple<DistributedMessage, RefreshInstruction[]>>();
             foreach (var msg in messages)
             {
-                var instructions = ConvertToInstruction(msg);
-                batchedMsg.Add(new Tuple<Message, RefreshInstruction[]>(msg, instructions));
+                var instructions = DistributedMessage.ConvertToInstructions(msg);
+                batchedMsg.Add(new Tuple<DistributedMessage, RefreshInstruction[]>(msg, instructions));
             }
 
             var servers = batchedMsg.SelectMany(x => x.Item1.Servers).Distinct();

@@ -76,22 +76,22 @@ namespace umbraco.presentation.webservices
             {
                 switch (instruction.RefreshType)
                 {
-                    case RefreshInstruction.RefreshMethodType.RefreshAll:
+                    case RefreshMethodType.RefreshAll:
                         RefreshAll(instruction.RefresherId);
                         break;
-                    case RefreshInstruction.RefreshMethodType.RefreshByGuid:
+                    case RefreshMethodType.RefreshByGuid:
                         RefreshByGuid(instruction.RefresherId, instruction.GuidId);
                         break;
-                    case RefreshInstruction.RefreshMethodType.RefreshById:
+                    case RefreshMethodType.RefreshById:
                         RefreshById(instruction.RefresherId, instruction.IntId);
                         break;
-                    case RefreshInstruction.RefreshMethodType.RefreshByIds:
+                    case RefreshMethodType.RefreshByIds:
                         RefreshByIds(instruction.RefresherId, instruction.JsonIds);
                         break;
-                    case RefreshInstruction.RefreshMethodType.RefreshByJson:
+                    case RefreshMethodType.RefreshByJson:
                         RefreshByJson(instruction.RefresherId, instruction.JsonPayload);
                         break;
-                    case RefreshInstruction.RefreshMethodType.RemoveById:
+                    case RefreshMethodType.RemoveById:
                         RemoveById(instruction.RefresherId, instruction.IntId);
                         break;
                 }

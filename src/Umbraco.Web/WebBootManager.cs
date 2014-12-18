@@ -321,26 +321,34 @@ namespace Umbraco.Web
             DefaultRenderMvcControllerResolver.Current = new DefaultRenderMvcControllerResolver(typeof(RenderMvcController));
 
             //Override the ServerMessengerResolver to set a username/password for the distributed calls
-            ServerMessengerResolver.Current.SetServerMessenger(new BatchedServerMessenger(() =>
-            {
-                //we should not proceed to change this if the app/database is not configured since there will 
-                // be no user, plus we don't need to have server messages sent if this is the case.
-                if (ApplicationContext.IsConfigured && ApplicationContext.DatabaseContext.IsDatabaseConfigured)
-                {
-                    try
-                    {
-                        var user = User.GetUser(UmbracoConfig.For.UmbracoSettings().DistributedCall.UserId);
-                        return new System.Tuple<string, string>(user.LoginName, user.GetPassword());
-                    }
-                    catch (Exception e)
-                    {
-                        LogHelper.Error<WebBootManager>("An error occurred trying to set the IServerMessenger during application startup", e);
-                        return null;
-                    }
-                }
-                LogHelper.Warn<WebBootManager>("Could not initialize the DefaultServerMessenger, the application is not configured or the database is not configured");
-                return null;
-            }));
+            ServerMessengerResolver.Current.SetServerMessenger(new BatchedDatabaseServerMessenger(UmbracoConfig.For.UmbracoSettings().DistributedCall.Enabled));
+            //ServerMessengerResolver.Current.SetServerMessenger(new DatabaseServerMessenger(UmbracoConfig.For.UmbracoSettings().DistributedCall.Enabled));
+            //ServerMessengerResolver.Current.SetServerMessenger(new BatchedServerMessenger(() =>
+            //{
+            //    //we should not proceed to change this if the app/database is not configured since there will 
+            //    // be no user, plus we don't need to have server messages sent if this is the case.
+            //    if (ApplicationContext.IsConfigured && ApplicationContext.DatabaseContext.IsDatabaseConfigured)
+            //    {
+            //        //disable if they are not enabled
+            //        if (UmbracoConfig.For.UmbracoSettings().DistributedCall.Enabled == false)
+            //        {
+            //            return null;
+            //        }
+
+            //        try
+            //        {
+            //            var user = User.GetUser(UmbracoConfig.For.UmbracoSettings().DistributedCall.UserId);
+            //            return new System.Tuple<string, string>(user.LoginName, user.GetPassword());
+            //        }
+            //        catch (Exception e)
+            //        {
+            //            LogHelper.Error<WebBootManager>("An error occurred trying to set the IServerMessenger during application startup", e);
+            //            return null;
+            //        }
+            //    }
+            //    LogHelper.Warn<WebBootManager>("Could not initialize the DefaultServerMessenger, the application is not configured or the database is not configured");
+            //    return null;
+            //}));
 
             SurfaceControllerResolver.Current = new SurfaceControllerResolver(
                 PluginManager.Current.ResolveSurfaceControllers());

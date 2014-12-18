@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Web.Script.Serialization;
 
 namespace Umbraco.Core.Sync
 {
@@ -11,18 +13,7 @@ namespace Umbraco.Core.Sync
         public int IntId { get; set; }
         public string JsonIds { get; set; }
         public string JsonPayload { get; set; }
-
-        [Serializable]
-        public enum RefreshMethodType
-        {
-            RefreshAll,
-            RefreshByGuid,
-            RefreshById,
-            RefreshByIds,
-            RefreshByJson,
-            RemoveById
-        }
-
+        
         protected bool Equals(RefreshInstruction other)
         {
             return RefreshType == other.RefreshType && RefresherId.Equals(other.RefresherId) && GuidId.Equals(other.GuidId) && IntId == other.IntId && string.Equals(JsonIds, other.JsonIds) && string.Equals(JsonPayload, other.JsonPayload);

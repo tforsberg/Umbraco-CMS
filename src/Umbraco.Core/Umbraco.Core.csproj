@@ -368,6 +368,7 @@
     <Compile Include="Models\PublishedContent\PublishedContentModel.cs" />
     <Compile Include="Models\PublishedContent\PublishedContentModelFactoryResolver.cs" />
     <Compile Include="Models\PartialView.cs" />
+    <Compile Include="Models\Rdbms\CacheInstructionDto.cs" />
     <Compile Include="Models\TagCacheStorageType.cs" />
     <Compile Include="Models\TaggableObjectTypes.cs" />
     <Compile Include="Models\TaggedEntity.cs" />
@@ -1097,8 +1098,11 @@
     <Compile Include="Strings\ContentBaseExtensions.cs" />
     <Compile Include="Strings\Diff.cs" />
     <Compile Include="Sync\CurrentServerEnvironmentStatus.cs" />
+    <Compile Include="Sync\DatabaseServerMessenger.cs" />
+    <Compile Include="Sync\DistributedMessage.cs" />
     <Compile Include="Sync\RefreshInstruction.cs" />
     <Compile Include="Sync\ServerEnvironmentHelper.cs" />
+    <Compile Include="Sync\RefreshMethodType.cs" />
     <Compile Include="TopologicalSorter.cs" />
     <Compile Include="Strings\DefaultUrlSegmentProvider.cs" />
     <Compile Include="Strings\IUrlSegmentProvider.cs" />
