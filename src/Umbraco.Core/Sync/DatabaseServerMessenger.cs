@@ -45,6 +45,20 @@ namespace Umbraco.Core.Sync
         private const int SyncTimeFrameSeconds = 5;
         private long _lastUtcTicks;
 
+        /// <summary>
+        /// A check to see if a distributed call should be made or only to refresh on the single instance
+        /// </summary>
+        /// <param name="servers"></param>
+        /// <param name="refresher"></param>
+        /// <param name="dispatchType"></param>
+        /// <returns></returns>
+        protected override bool ShouldMakeDistributedCall(IEnumerable<IServerAddress> servers, ICacheRefresher refresher, MessageType dispatchType)
+        {
+            //we don't care if there's servers listed or not, if distributed call is enabled we will make the call
+
+            return UseDistributedCalls;
+        }
+
         protected override void PerformDistributedCall(
             IEnumerable<IServerAddress> servers, 
             ICacheRefresher refresher, 

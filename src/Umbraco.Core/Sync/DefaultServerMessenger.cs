@@ -301,6 +301,21 @@ namespace Umbraco.Core.Sync
             }
         }
 
+        /// <summary>
+        /// A check to see if a distributed call should be made or only to refresh on the single instance
+        /// </summary>
+        /// <param name="servers"></param>
+        /// <param name="refresher"></param>
+        /// <param name="dispatchType"></param>
+        /// <returns></returns>
+        protected virtual bool ShouldMakeDistributedCall(
+            IEnumerable<IServerAddress> servers,
+            ICacheRefresher refresher,
+            MessageType dispatchType)
+        {
+            return UseDistributedCalls && servers.Any();
+        }
+
         private void MessageSeversForManyObjects<T>(
             IEnumerable<IServerAddress> servers,
             ICacheRefresher refresher,
@@ -315,7 +330,7 @@ namespace Umbraco.Core.Sync
 
             //Now, check if we are using Distrubuted calls. If there are no servers in the list then we
             // can definitely not distribute.
-            if (!UseDistributedCalls || !servers.Any())
+            if (!ShouldMakeDistributedCall(servers, refresher, dispatchType))
             {
                 //if we are not, then just invoke the call on the cache refresher
                 InvokeMethodOnRefresherInstance(refresher, dispatchType, getId, instances);
@@ -346,7 +361,7 @@ namespace Umbraco.Core.Sync
 
             //Now, check if we are using Distrubuted calls. If there are no servers in the list then we
             // can definitely not distribute.
-            if (!UseDistributedCalls || !servers.Any())
+            if (!ShouldMakeDistributedCall(servers, refresher, dispatchType))
             {
                 //if we are not, then just invoke the call on the cache refresher
                 InvokeMethodOnRefresherInstance(refresher, dispatchType, ids, jsonPayload);
