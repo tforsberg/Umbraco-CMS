@@ -13,7 +13,8 @@ namespace Umbraco.Web
 {
     internal class BatchedDatabaseServerMessenger : DatabaseServerMessenger
     {
-        internal BatchedDatabaseServerMessenger(bool enableDistCalls) : base(enableDistCalls)
+        public BatchedDatabaseServerMessenger(ApplicationContext appContext, bool enableDistCalls, DatabaseServerMessengerOptions options)
+            : base(appContext, enableDistCalls, options)
         {
             UmbracoModule.EndRequest += UmbracoModule_EndRequest;
             UmbracoModule.RouteAttempt += UmbracoModule_RouteAttempt;

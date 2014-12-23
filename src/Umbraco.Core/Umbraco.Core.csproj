@@ -1102,6 +1102,7 @@
     <Compile Include="Strings\Diff.cs" />
     <Compile Include="Sync\CurrentServerEnvironmentStatus.cs" />
     <Compile Include="Sync\DatabaseServerMessenger.cs" />
+    <Compile Include="Sync\DatabaseServerMessengerOptions.cs" />
     <Compile Include="Sync\DistributedMessage.cs" />
     <Compile Include="Sync\RefreshInstruction.cs" />
     <Compile Include="Sync\ServerEnvironmentHelper.cs" />

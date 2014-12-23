@@ -19,12 +19,19 @@ namespace Umbraco.Core.Sync
 {
     internal class DatabaseServerMessenger : DefaultServerMessenger
     {
-        internal DatabaseServerMessenger(bool enableDistCalls)
-            : base(() => enableDistCalls 
+        private readonly ApplicationContext _appContext;
+        private readonly DatabaseServerMessengerOptions _options;
+
+        public DatabaseServerMessenger(ApplicationContext appContext, bool enableDistCalls, DatabaseServerMessengerOptions options)
+            : base(() => enableDistCalls
                 //This is simply to ensure that dist calls gets enabled on the base messenger - a bit of a hack but works
-                ? new Tuple<string, string>("empty", "empty") 
+                ? new Tuple<string, string>("empty", "empty")
                 : null)
         {
+            if (appContext == null) throw new ArgumentNullException("appContext");
+            if (options == null) throw new ArgumentNullException("options");
+            _appContext = appContext;
+            _options = options;
             _lastUtcTicks = DateTime.UtcNow.Ticks;
 
             ReadLastSynced();
@@ -39,7 +46,7 @@ namespace Umbraco.Core.Sync
         }
 
         private readonly object _lock = new object();
-        private volatile  int _lastId = -1;
+        private int _lastId = -1;
         private volatile bool _syncing = false;
         //this ensures that only one thread can possibly check for sync operations every 5 seconds
         private const int SyncTimeFrameSeconds = 5;
@@ -83,7 +90,7 @@ namespace Umbraco.Core.Sync
                 UtcStamp = DateTime.UtcNow,
                 JsonInstruction = JsonConvert.SerializeObject(instructions, Formatting.None)
             };
-            ApplicationContext.Current.DatabaseContext.Database.Insert(dto);
+            _appContext.DatabaseContext.Database.Insert(dto);
         }
 
         /// <summary>
@@ -99,7 +106,7 @@ namespace Umbraco.Core.Sync
             // cache file.
             LogHelper.Warn<DatabaseServerMessenger>("No last synced Id found, this generally means this is a new server/install. The server will adjust it's last synced id to the latest found in the database and will start maintaining cache updates based on that id");
             //go get the last id in the db and store it
-            var lastId = ApplicationContext.Current.DatabaseContext.Database.ExecuteScalar<int>(
+            var lastId = _appContext.DatabaseContext.Database.ExecuteScalar<int>(
                 "SELECT MAX(id) FROM umbracoCacheInstruction");
             if (lastId > 0)
             {
@@ -137,7 +144,7 @@ namespace Umbraco.Core.Sync
                                 .Where<CacheInstructionDto>(dto => dto.Id > _lastId)
                                 .OrderBy<CacheInstructionDto>(dto => dto.Id);
 
-                            var list = ApplicationContext.Current.DatabaseContext.Database.Fetch<CacheInstructionDto>(sql);
+                            var list = _appContext.DatabaseContext.Database.Fetch<CacheInstructionDto>(sql);
 
                             if (list.Count > 0)
                             {
@@ -156,6 +163,9 @@ namespace Umbraco.Core.Sync
 
                                 SaveLastSynced(list.Max(x => x.Id));
                             }
+
+                            //prune old records
+                            _appContext.DatabaseContext.Database.Delete<CacheInstructionDto>("WHERE utcStamp < @pruneDate", new {pruneDate = DateTime.UtcNow.AddDays(_options.DaysToRetainInstructionRecords*-1)});
 
                             //reset
                             _syncing = false;
