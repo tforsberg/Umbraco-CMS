@@ -31,15 +31,15 @@ namespace Umbraco.Core.Sync
 
             //TODO: we need to make sure we can read from the db here!
 
-            //if there's been nothing sync, perform a sync, this will store the latest id
+            //if there's been nothing sync, perform a first sync, this will store the latest id
             if (_lastId == -1)
             {
-                Sync();
+                FirstSync();
             }
         }
 
-        private readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
-        private int _lastId = -1;
+        private readonly object _lock = new object();
+        private volatile  int _lastId = -1;
         private volatile bool _syncing = false;
         //this ensures that only one thread can possibly check for sync operations every 5 seconds
         private const int SyncTimeFrameSeconds = 5;
@@ -86,70 +86,84 @@ namespace Umbraco.Core.Sync
             ApplicationContext.Current.DatabaseContext.Database.Insert(dto);
         }
 
+        /// <summary>
+        /// Save the latest id in the db as the last synced
+        /// </summary>
+        /// <remarks>
+        /// THIS IS NOT THREAD SAFE
+        /// </remarks>
+        internal void FirstSync()
+        {
+            //we haven't synced - in this case we aren't going to sync the whole thing, we will assume this is a new 
+            // server and it will need to rebuild it's own persisted cache. Currently in that case it is Lucene and the xml
+            // cache file.
+            LogHelper.Warn<DatabaseServerMessenger>("No last synced Id found, this generally means this is a new server/install. The server will adjust it's last synced id to the latest found in the database and will start maintaining cache updates based on that id");
+            //go get the last id in the db and store it
+            var lastId = ApplicationContext.Current.DatabaseContext.Database.ExecuteScalar<int>(
+                "SELECT MAX(id) FROM umbracoCacheInstruction");
+            if (lastId > 0)
+            {
+                SaveLastSynced(lastId);
+            }
+        }
+
         internal void Sync()
         {
-            //already syncing, don't process
-            if (_syncing) return;
 
-            if (_lastId == -1)
+            //don't process, this is not in the timeframe - we don't want to check the db every request, only once if it's been at least 5 seconds.
+            if (TimeSpan.FromTicks(DateTime.UtcNow.Ticks).TotalSeconds - TimeSpan.FromTicks(_lastUtcTicks).TotalSeconds <= SyncTimeFrameSeconds)
             {
-                using (new WriteLock(_lock))
-                {
-                    //we haven't synced - in this case we aren't going to sync the whole thing, we will assume this is a new 
-                    // server and it will need to rebuild it's own persisted cache. Currently in that case it is Lucene and the xml
-                    // cache file.
-                    LogHelper.Warn<DatabaseServerMessenger>("No last synced Id found, this generally means this is a new server/install. The server will adjust it's last synced id to the latest found in the database and will start maintaining cache updates based on that id");
-                    //go get the last id in the db and store it
-                    var lastId = ApplicationContext.Current.DatabaseContext.Database.ExecuteScalar<int>(
-                        "SELECT MAX(id) FROM umbracoCacheInstruction");
-                    if (lastId > 0)
-                    {
-                        SaveLastSynced(lastId);
-                    }
-                    return;
-                }
-            }
-
-            //don't process, this is not in the timeframe
-            if (TimeSpan.FromTicks(DateTime.UtcNow.Ticks).TotalSeconds - TimeSpan.FromTicks(_lastUtcTicks).TotalSeconds <= SyncTimeFrameSeconds) 
+                //NOTE: Removed logging as it will just keep showing this and people will wonder why.
+                //LogHelper.Debug<DatabaseServerMessenger>("Skipping distributed sync, not in timeframe");
                 return;
-
-            using (new WriteLock(_lock))
-            {
-                //set the flag so other threads don't attempt
-                _syncing = true;
-                _lastUtcTicks = DateTime.UtcNow.Ticks;
-
-                //get the outstanding items
-
-                var sql = new Sql().Select("*")
-                    .From<CacheInstructionDto>()
-                    .Where<CacheInstructionDto>(dto => dto.Id > _lastId)
-                    .OrderBy<CacheInstructionDto>(dto => dto.Id);
-
-                var list = ApplicationContext.Current.DatabaseContext.Database.Fetch<CacheInstructionDto>(sql);
-
-                if (list.Count > 0)
-                {
-                    foreach (var item in list)
-                    {
-                        try
-                        {
-                            var jsonArray = JsonConvert.DeserializeObject<JArray>(item.JsonInstruction);
-                            UpdateRefreshers(jsonArray);
-                        }
-                        catch (JsonException ex)
-                        {
-                            LogHelper.Error<DatabaseServerMessenger>("Could not deserialize a distributed cache instruction! Value: " + item.JsonInstruction, ex);
-                        }
-                    }
-
-                    SaveLastSynced(list.Max(x => x.Id));
-                }
             }
 
-            //reset
-            _syncing = false;
+            if (_syncing == false)
+            {
+                lock (_lock)
+                {
+                    if (_syncing == false)
+                    {
+                        //set the flag so other threads don't attempt
+                        _syncing = true;
+                        _lastUtcTicks = DateTime.UtcNow.Ticks;
+
+                        using (DisposableTimer.DebugDuration<DatabaseServerMessenger>("Syncing from database..."))
+                        {
+                            //get the outstanding items
+
+                            var sql = new Sql().Select("*")
+                                .From<CacheInstructionDto>()
+                                .Where<CacheInstructionDto>(dto => dto.Id > _lastId)
+                                .OrderBy<CacheInstructionDto>(dto => dto.Id);
+
+                            var list = ApplicationContext.Current.DatabaseContext.Database.Fetch<CacheInstructionDto>(sql);
+
+                            if (list.Count > 0)
+                            {
+                                foreach (var item in list)
+                                {
+                                    try
+                                    {
+                                        var jsonArray = JsonConvert.DeserializeObject<JArray>(item.JsonInstruction);
+                                        UpdateRefreshers(jsonArray);
+                                    }
+                                    catch (JsonException ex)
+                                    {
+                                        LogHelper.Error<DatabaseServerMessenger>("Could not deserialize a distributed cache instruction! Value: " + item.JsonInstruction, ex);
+                                    }
+                                }
+
+                                SaveLastSynced(list.Max(x => x.Id));
+                            }
+
+                            //reset
+                            _syncing = false;
+                        }
+                        
+                    }
+                }
+            }
         }
 
         internal void UpdateRefreshers(JArray jsonArray)

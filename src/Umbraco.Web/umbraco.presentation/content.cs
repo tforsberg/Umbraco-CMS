@@ -421,11 +421,17 @@ namespace umbraco
             // find the parent
             XmlNode parentNode = level == 1
                 ? xmlContentCopy.DocumentElement
-                : xmlContentCopy.GetElementById(parentId.ToString());
+                : xmlContentCopy.GetElementById(parentId.ToString(CultureInfo.InvariantCulture));
 
             // no parent = cannot do anything
             if (parentNode == null)
-                return xmlContentCopy;
+            {
+                //TODO: At least we are logging this now, before there was no indication of anything going wrong, but surely there's a better way to deal with this?
+                // Since the document is out of date, we should probably rebuild it right?
+                LogHelper.Warn<content>("No parent node could be found with parentID: " + parentId + " therefore the xml cache document could not be updated. The XML cache file is out of sync, you may need to delete the umbraco.config file and restart your web application");
+                return xmlContentCopy;                
+            }
+
 
             // define xpath for getting the children nodes (not properties) of a node
             var childNodesXPath = UmbracoConfig.For.UmbracoSettings().Content.UseLegacyXmlSchema

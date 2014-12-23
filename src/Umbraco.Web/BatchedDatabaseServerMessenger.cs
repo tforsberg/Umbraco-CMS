@@ -21,17 +21,26 @@ namespace Umbraco.Web
 
         void UmbracoModule_RouteAttempt(object sender, Routing.RoutableAttemptEventArgs e)
         {
-            if (e.Outcome == EnsureRoutableOutcome.NotDocumentRequest)
+            switch (e.Outcome)
             {
-                //so it's not a document request, we'll check if it's a back office request
-                if (e.HttpContext.Request.Url.IsBackOfficeRequest(HttpRuntime.AppDomainAppVirtualPath))
-                {
-                    
-                    //it's a back office request, we should sync!
+                case EnsureRoutableOutcome.IsRoutable:
                     Sync();
-
-                }
+                    break;
+                case EnsureRoutableOutcome.NotDocumentRequest:
+                    //so it's not a document request, we'll check if it's a back office request
+                    if (e.HttpContext.Request.Url.IsBackOfficeRequest(HttpRuntime.AppDomainAppVirtualPath))
+                    {
+                        //it's a back office request, we should sync!
+                        Sync();
+                    }
+                    break;
+                case EnsureRoutableOutcome.NotReady:
+                case EnsureRoutableOutcome.NotConfigured:
+                case EnsureRoutableOutcome.NoContent:
+                default:
+                    break;
             }
+
         }
 
         void UmbracoModule_EndRequest(object sender, EventArgs e)
