@@ -48,8 +48,6 @@ namespace Umbraco.Core.Sync
         private readonly object _lock = new object();
         private int _lastId = -1;
         private volatile bool _syncing = false;
-        //this ensures that only one thread can possibly check for sync operations every 5 seconds
-        private const int SyncTimeFrameSeconds = 5;
         private long _lastUtcTicks;
 
         /// <summary>
@@ -118,7 +116,7 @@ namespace Umbraco.Core.Sync
         {
 
             //don't process, this is not in the timeframe - we don't want to check the db every request, only once if it's been at least 5 seconds.
-            if (TimeSpan.FromTicks(DateTime.UtcNow.Ticks).TotalSeconds - TimeSpan.FromTicks(_lastUtcTicks).TotalSeconds <= SyncTimeFrameSeconds)
+            if (TimeSpan.FromTicks(DateTime.UtcNow.Ticks).TotalSeconds - TimeSpan.FromTicks(_lastUtcTicks).TotalSeconds <= _options.ThrottleSeconds)
             {
                 //NOTE: Removed logging as it will just keep showing this and people will wonder why.
                 //LogHelper.Debug<DatabaseServerMessenger>("Skipping distributed sync, not in timeframe");
