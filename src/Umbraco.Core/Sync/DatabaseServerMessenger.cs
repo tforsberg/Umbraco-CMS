@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Web.Script.Serialization;
+using log4net;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Umbraco.Core.Cache;
@@ -17,10 +18,15 @@ using umbraco.interfaces;
 
 namespace Umbraco.Core.Sync
 {
-    internal class DatabaseServerMessenger : DefaultServerMessenger
+    public class DatabaseServerMessenger : DefaultServerMessenger
     {
         private readonly ApplicationContext _appContext;
         private readonly DatabaseServerMessengerOptions _options;
+        private readonly object _lock = new object();
+        private int _lastId = -1;
+        private volatile bool _syncing = false;
+        private long _lastUtcTicks;
+        private bool _initialized = false;
 
         public DatabaseServerMessenger(ApplicationContext appContext, bool enableDistCalls, DatabaseServerMessengerOptions options)
             : base(() => enableDistCalls
@@ -33,22 +39,8 @@ namespace Umbraco.Core.Sync
             _appContext = appContext;
             _options = options;
             _lastUtcTicks = DateTime.UtcNow.Ticks;
-
-            ReadLastSynced();
-
-            //TODO: we need to make sure we can read from the db here!
-
-            //if there's been nothing sync, perform a first sync, this will store the latest id
-            if (_lastId == -1)
-            {
-                FirstSync();
-            }
+            UmbracoApplicationBase.ApplicationStarted += OnApplicationStarted;
         }
-
-        private readonly object _lock = new object();
-        private int _lastId = -1;
-        private volatile bool _syncing = false;
-        private long _lastUtcTicks;
 
         /// <summary>
         /// A check to see if a distributed call should be made or only to refresh on the single instance
@@ -59,8 +51,13 @@ namespace Umbraco.Core.Sync
         /// <returns></returns>
         protected override bool ShouldMakeDistributedCall(IEnumerable<IServerAddress> servers, ICacheRefresher refresher, MessageType dispatchType)
         {
-            //we don't care if there's servers listed or not, if distributed call is enabled we will make the call
+            
+            if (_initialized == false)
+            {
+                return false;
+            }
 
+            //we don't care if there's servers listed or not, if distributed call is enabled we will make the call
             return UseDistributedCalls;
         }
 
@@ -102,7 +99,18 @@ namespace Umbraco.Core.Sync
             //we haven't synced - in this case we aren't going to sync the whole thing, we will assume this is a new 
             // server and it will need to rebuild it's own persisted cache. Currently in that case it is Lucene and the xml
             // cache file.
-            LogHelper.Warn<DatabaseServerMessenger>("No last synced Id found, this generally means this is a new server/install. The server will adjust it's last synced id to the latest found in the database and will start maintaining cache updates based on that id");
+            LogHelper.Warn<DatabaseServerMessenger>("No last synced Id found, this generally means this is a new server/install. The server will rebuild its caches and indexes and then adjust it's last synced id to the latest found in the database and will start maintaining cache updates based on that id");
+            
+            //perform rebuilds if specified
+            if (_options.RebuildingCallbacks != null)
+            {
+                foreach (var callback in _options.RebuildingCallbacks)
+                {
+                    callback();
+                }
+            }
+            
+            
             //go get the last id in the db and store it
             var lastId = _appContext.DatabaseContext.Database.ExecuteScalar<int>(
                 "SELECT MAX(id) FROM umbracoCacheInstruction");
@@ -253,6 +261,7 @@ namespace Umbraco.Core.Sync
             File.WriteAllText(Path.Combine(tempFolder, NetworkHelper.FileSafeMachineName + "-lastsynced.txt"), id.ToString(CultureInfo.InvariantCulture));
         }
 
+     
         #region Updates the refreshers
         private void RefreshAll(Guid uniqueIdentifier)
         {
@@ -300,5 +309,29 @@ namespace Umbraco.Core.Sync
             cr.Remove(Id);
         } 
         #endregion
+
+        /// <summary>
+        /// Ensure we can connect to the db and initialize
+        /// </summary>
+        public void OnApplicationStarted(object sender, EventArgs eventArgs)
+        {
+            if (_appContext.IsConfigured && _appContext.DatabaseContext.IsDatabaseConfigured && _appContext.DatabaseContext.CanConnect)
+            {
+                ReadLastSynced();
+
+                //if there's been nothing sync, perform a first sync, this will store the latest id
+                if (_lastId == -1)
+                {
+                    FirstSync();
+                }
+
+                _initialized = true;
+            }
+            else
+            {
+                LogHelper.Warn<DatabaseServerMessenger>("The app is not configured or cannot connect to the database, this server cannot be initialized with " + typeof(DatabaseServerMessenger) + ", distributed calls will not be enabled for this server");
+            }
+            
+        }
     }
 }

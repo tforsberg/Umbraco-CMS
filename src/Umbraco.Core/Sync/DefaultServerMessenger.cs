@@ -16,7 +16,7 @@ namespace Umbraco.Core.Sync
     /// <summary>
     /// The default server messenger that uses web services to keep servers in sync
     /// </summary>
-    internal class DefaultServerMessenger : IServerMessenger
+    public class DefaultServerMessenger : IServerMessenger
     {
         private readonly Func<Tuple<string, string>> _getUserNamePasswordDelegate;
         private volatile bool _hasResolvedDelegate = false;

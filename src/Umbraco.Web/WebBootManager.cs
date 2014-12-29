@@ -11,6 +11,7 @@ using System.Web.Mvc;
 using System.Web.Routing;
 using ClientDependency.Core.Config;
 using Examine;
+using umbraco;
 using Umbraco.Core;
 using Umbraco.Core.Configuration;
 using Umbraco.Core.Dictionary;
@@ -37,6 +38,7 @@ using Umbraco.Web.Scheduling;
 using Umbraco.Web.UI.JavaScript;
 using Umbraco.Web.WebApi;
 using umbraco.BusinessLogic;
+using GlobalSettings = Umbraco.Core.Configuration.GlobalSettings;
 using ProfilingViewEngine = Umbraco.Core.Profiling.ProfilingViewEngine;
 
 
@@ -324,7 +326,18 @@ namespace Umbraco.Web
             ServerMessengerResolver.Current.SetServerMessenger(new BatchedDatabaseServerMessenger(
                 ApplicationContext,
                 UmbracoConfig.For.UmbracoSettings().DistributedCall.Enabled,
-                new DatabaseServerMessengerOptions()));
+                new DatabaseServerMessengerOptions
+                {
+                    RebuildingCallbacks = new Action[]
+                    {
+                        //rebuild the xml cache file if the server is not synced
+                        () => content.Instance.RefreshContentFromDatabase(),
+                        //rebuild indexes if the server is not synced
+                        // NOTE: This will rebuild ALL indexes including the members, if developers want to target specific 
+                        // indexes then they can adjust this logic themselves.
+                        () => ExamineManager.Instance.RebuildIndex()
+                    }
+                }));
              
             //ServerMessengerResolver.Current.SetServerMessenger(new DatabaseServerMessenger(UmbracoConfig.For.UmbracoSettings().DistributedCall.Enabled));
             //ServerMessengerResolver.Current.SetServerMessenger(new BatchedServerMessenger(() =>

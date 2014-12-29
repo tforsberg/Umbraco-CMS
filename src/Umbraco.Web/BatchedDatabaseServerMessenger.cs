@@ -11,7 +11,7 @@ using Umbraco.Web.Routing;
 
 namespace Umbraco.Web
 {
-    internal class BatchedDatabaseServerMessenger : DatabaseServerMessenger
+    public class BatchedDatabaseServerMessenger : DatabaseServerMessenger
     {
         public BatchedDatabaseServerMessenger(ApplicationContext appContext, bool enableDistCalls, DatabaseServerMessengerOptions options)
             : base(appContext, enableDistCalls, options)
