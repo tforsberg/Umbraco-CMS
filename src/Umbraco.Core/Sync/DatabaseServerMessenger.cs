@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Web;
 using System.Web.Script.Serialization;
 using log4net;
 using Newtonsoft.Json;
@@ -229,8 +230,8 @@ namespace Umbraco.Core.Sync
 
         internal void ReadLastSynced()
         {
-            var tempFolder = IOHelper.MapPath("~/App_Data/TEMP/DistCache");
-            var file = Path.Combine(tempFolder, NetworkHelper.FileSafeMachineName + "-lastsynced.txt");
+            var tempFolder = IOHelper.MapPath("~/App_Data/TEMP/DistCache/" + NetworkHelper.FileSafeMachineName);
+            var file = Path.Combine(tempFolder, HttpRuntime.AppDomainAppId.ReplaceNonAlphanumericChars(string.Empty) + "-lastsynced.txt");
             if (File.Exists(file))
             {
                 var content = File.ReadAllText(file);
@@ -252,13 +253,13 @@ namespace Umbraco.Core.Sync
         private void SaveLastSynced(int id)
         {
             _lastId = id;
-            var tempFolder = IOHelper.MapPath("~/App_Data/TEMP/DistCache");
+            var tempFolder = IOHelper.MapPath("~/App_Data/TEMP/DistCache/" + NetworkHelper.FileSafeMachineName);
             if (Directory.Exists(tempFolder) == false)
             {
                 Directory.CreateDirectory(tempFolder);
             }
             //save the file
-            File.WriteAllText(Path.Combine(tempFolder, NetworkHelper.FileSafeMachineName + "-lastsynced.txt"), id.ToString(CultureInfo.InvariantCulture));
+            File.WriteAllText(Path.Combine(tempFolder, HttpRuntime.AppDomainAppId.ReplaceNonAlphanumericChars(string.Empty) + "-lastsynced.txt"), id.ToString(CultureInfo.InvariantCulture));
         }
 
      

@@ -9,6 +9,12 @@
     <h4>Indexers</h4>
 
     <ul ng-hide="loading">
+        
+        <div ng-if="indexError" class="alert alert-error">
+            <p>{{indexError.errorMsg}}</p>
+            <p>{{indexError.data.Message}}</p>
+        </div>
+
         <li class="provider" ng-repeat="indexer in indexerDetails">
 
             <a href="" ng-click="toggle(indexer, 'showProperties')">

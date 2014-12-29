@@ -72,7 +72,16 @@ namespace Umbraco.Web.WebServices
         /// <returns></returns>
         public IEnumerable<ExamineIndexerModel> GetIndexerDetails()
         {
-            return ExamineManager.Instance.IndexProviderCollection.Select(CreateModel);
+            
+            try
+            {
+                return ExamineManager.Instance.IndexProviderCollection.Select(CreateModel);
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error<ExamineManagementApiController>("Could not retrieve index details", ex);
+                throw new HttpResponseException(Request.CreateErrorResponse(HttpStatusCode.BadRequest, ex));
+            }
         }
 
         /// <summary>
@@ -245,7 +254,7 @@ namespace Umbraco.Web.WebServices
                 indexerModel.DocumentCount = luceneIndexer.GetIndexDocumentCount();
                 indexerModel.FieldCount = luceneIndexer.GetIndexFieldCount();
                 indexerModel.IsOptimized = luceneIndexer.IsIndexOptimized();
-                indexerModel.DeletionCount = luceneIndexer.GetDeletedDocumentsCount();                
+                indexerModel.DeletionCount = luceneIndexer.GetDeletedDocumentsCount();           
             }
             return indexerModel;
         }

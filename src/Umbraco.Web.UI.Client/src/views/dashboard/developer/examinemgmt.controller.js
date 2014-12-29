@@ -118,9 +118,11 @@ function examineMgmtController($scope, umbRequestHelper, $log, $http, $q, $timeo
         //get the indexer details
         umbRequestHelper.resourcePromise(
             $http.get(umbRequestHelper.getApiUrl("examineMgmtBaseUrl", "GetIndexerDetails")),
-            'Failed to retrieve indexer details')
+            'Failed to retrieve indexer details, check log for details')
         .then(function(data) {
             $scope.indexerDetails = data; 
+        }, function (reason) {
+            $scope.indexError = reason;
         }),
 
         //get the searcher details
