@@ -222,7 +222,7 @@ namespace Umbraco.Core.Sync
         internal void ReadLastSynced()
         {
             var tempFolder = IOHelper.MapPath("~/App_Data/TEMP/DistCache");
-            var file = Path.Combine(tempFolder, "lastsynced.txt");
+            var file = Path.Combine(tempFolder, NetworkHelper.FileSafeMachineName + "-lastsynced.txt");
             if (File.Exists(file))
             {
                 var content = File.ReadAllText(file);
@@ -250,7 +250,7 @@ namespace Umbraco.Core.Sync
                 Directory.CreateDirectory(tempFolder);
             }
             //save the file
-            File.WriteAllText(Path.Combine(tempFolder, "lastsynced.txt"), id.ToString(CultureInfo.InvariantCulture));
+            File.WriteAllText(Path.Combine(tempFolder, NetworkHelper.FileSafeMachineName + "-lastsynced.txt"), id.ToString(CultureInfo.InvariantCulture));
         }
 
         #region Updates the refreshers
