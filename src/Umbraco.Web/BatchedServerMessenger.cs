@@ -78,7 +78,7 @@ namespace Umbraco.Web
             base.MessageSeversForIdsOrJson(servers, refresher, dispatchType, ids, jsonPayload);
 
             //Now, check if we are using Distrubuted calls
-            if (UseDistributedCalls && servers.Any())
+            if (ShouldMakeDistributedCall(servers, refresher, dispatchType))
             {
                 //invoke on the current server - we will basically be double cache refreshing for the calling
                 // server but that just needs to be done currently, see the link above for details.

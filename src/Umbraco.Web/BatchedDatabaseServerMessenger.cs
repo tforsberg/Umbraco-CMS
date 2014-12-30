@@ -95,7 +95,8 @@ namespace Umbraco.Web
             var dto = new CacheInstructionDto
             {
                 UtcStamp = DateTime.UtcNow,
-                JsonInstruction = JsonConvert.SerializeObject(instructions, Formatting.None)
+                JsonInstruction = JsonConvert.SerializeObject(instructions, Formatting.None),
+                OriginatedFrom = GetOriginatorValue()
             };
             ApplicationContext.Current.DatabaseContext.Database.Insert(dto);
         }

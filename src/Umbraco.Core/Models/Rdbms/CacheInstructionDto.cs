@@ -23,6 +23,9 @@ namespace Umbraco.Core.Models.Rdbms
         [NullSetting(NullSetting = NullSettings.NotNull)]
         public string JsonInstruction { get; set; }
 
-
+        [Column("originated")]
+        [NullSetting(NullSetting = NullSettings.NotNull)]
+        [Length(500)]
+        public string OriginatedFrom { get; set; }
     }
 }

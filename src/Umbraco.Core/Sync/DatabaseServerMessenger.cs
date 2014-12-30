@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Web;
+using System.Web.Hosting;
 using System.Web.Script.Serialization;
 using log4net;
 using Newtonsoft.Json;
@@ -41,6 +42,34 @@ namespace Umbraco.Core.Sync
             _options = options;
             _lastUtcTicks = DateTime.UtcNow.Ticks;
             UmbracoApplicationBase.ApplicationStarted += OnApplicationStarted;
+        }
+
+        /// <summary>
+        /// We need to check if distributed calls are enabled, if they are we also want to make sure 
+        /// that the current server's cache is updated internally in real time instead of at the end of
+        /// the call. This is because things like the URL cache, etc... might need to be updated during
+        /// the request that is making these calls.
+        /// </summary>
+        /// <param name="servers"></param>
+        /// <param name="refresher"></param>
+        /// <param name="dispatchType"></param>
+        /// <param name="ids"></param>
+        /// <param name="jsonPayload"></param>
+        /// <remarks>
+        /// See: http://issues.umbraco.org/issue/U4-2633#comment=67-15604
+        /// </remarks>
+        protected override void MessageSeversForIdsOrJson(IEnumerable<IServerAddress> servers, ICacheRefresher refresher, MessageType dispatchType, IEnumerable<object> ids = null, string jsonPayload = null)
+        {
+            //do all the normal stuff
+            base.MessageSeversForIdsOrJson(servers, refresher, dispatchType, ids, jsonPayload);
+
+            //Now, check if we are using Distrubuted calls
+            if (ShouldMakeDistributedCall(servers, refresher, dispatchType))
+            {
+                //invoke on the current server - we will basically be double cache refreshing for the calling
+                // server but that just needs to be done currently, see the link above for details.
+                InvokeMethodOnRefresherInstance(refresher, dispatchType, ids, jsonPayload);
+            }
         }
 
         /// <summary>
@@ -84,7 +113,8 @@ namespace Umbraco.Core.Sync
             var dto = new CacheInstructionDto
             {
                 UtcStamp = DateTime.UtcNow,
-                JsonInstruction = JsonConvert.SerializeObject(instructions, Formatting.None)
+                JsonInstruction = JsonConvert.SerializeObject(instructions, Formatting.None),
+                OriginatedFrom = GetOriginatorValue()
             };
             _appContext.DatabaseContext.Database.Insert(dto);
         }
@@ -155,6 +185,14 @@ namespace Umbraco.Core.Sync
 
                             if (list.Count > 0)
                             {
+                               
+                                // TODO: Here we could ignore anything that originated from this server since it will already have processed that
+                                // change locally (see notes in DatabaseServerMessenger.MessageSeversForIdsOrJson ). However, depending on the sequence
+                                // of events, I think this server will still need to process it's own instructions from the database to ensure the correct
+                                // instruction's sequence order is processed. 
+                                //
+                                //  var toProcess = list.Where(x => x.OriginatedFrom != GetOriginatorValue());
+
                                 foreach (var item in list)
                                 {
                                     try
@@ -241,6 +279,15 @@ namespace Umbraco.Core.Sync
                     _lastId = last;
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns the value to be stored in the originated column
+        /// </summary>
+        /// <returns></returns>
+        protected string GetOriginatorValue()
+        {
+            return JsonConvert.SerializeObject(new {machineName = NetworkHelper.MachineName, appDomainAppId = HttpRuntime.AppDomainAppId});
         }
 
         /// <summary>
