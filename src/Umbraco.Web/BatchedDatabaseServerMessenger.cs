@@ -51,13 +51,13 @@ namespace Umbraco.Web
                 return;
             }
 
-            var items = HttpContext.Current.Items[typeof(BatchedServerMessenger).Name] as List<DistributedMessage>;
+            var items = HttpContext.Current.Items[typeof(BatchedDatabaseServerMessenger).Name] as List<DistributedMessage>;
             if (items != null)
             {
                 var copied = new DistributedMessage[items.Count];
                 items.CopyTo(copied);
                 //now set to null so it get's cleaned up on this request
-                HttpContext.Current.Items[typeof(BatchedServerMessenger).Name] = null;
+                HttpContext.Current.Items[typeof(BatchedDatabaseServerMessenger).Name] = null;
 
                 SubmitInstructions(copied);
             }
@@ -72,11 +72,11 @@ namespace Umbraco.Web
                 throw new NotSupportedException("This messenger cannot execute without a valid/current UmbracoContext with an HttpContext assigned");
             }
 
-            if (UmbracoContext.Current.HttpContext.Items[typeof(BatchedServerMessenger).Name] == null)
+            if (UmbracoContext.Current.HttpContext.Items[typeof(BatchedDatabaseServerMessenger).Name] == null)
             {
-                UmbracoContext.Current.HttpContext.Items[typeof(BatchedServerMessenger).Name] = new List<DistributedMessage>();
+                UmbracoContext.Current.HttpContext.Items[typeof(BatchedDatabaseServerMessenger).Name] = new List<DistributedMessage>();
             }
-            var list = (List<DistributedMessage>)UmbracoContext.Current.HttpContext.Items[typeof(BatchedServerMessenger).Name];
+            var list = (List<DistributedMessage>)UmbracoContext.Current.HttpContext.Items[typeof(BatchedDatabaseServerMessenger).Name];
 
             list.Add(new DistributedMessage
             {
