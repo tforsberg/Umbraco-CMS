@@ -59,7 +59,8 @@ namespace Umbraco.Core.Persistence.Migrations.Initial
                                                                               {37, typeof (User2AppDto)},
                                                                               {38, typeof (User2NodeNotifyDto)},
                                                                               {39, typeof (User2NodePermissionDto)},
-                                                                              {40, typeof (ServerRegistrationDto)}
+                                                                              {40, typeof (ServerRegistrationDto)},
+                                                                              {41, typeof(CacheInstructionDto)}
                                                                           };
         #endregion
         
