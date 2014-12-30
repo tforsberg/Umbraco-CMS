@@ -12,7 +12,7 @@ namespace Umbraco.Core.Services
     /// <summary>
     /// Service to manage server registrations in the database
     /// </summary>
-    internal class ServerRegistrationService
+    public sealed class ServerRegistrationService
     {
         private readonly RepositoryFactory _repositoryFactory;
         private readonly IDatabaseUnitOfWorkProvider _uowProvider;
@@ -34,19 +34,16 @@ namespace Umbraco.Core.Services
         }
 
         /// <summary>
-        /// Called to 'call home' to ensure the current server has an active record
+        /// Called to 'call home' to ensure the current server has an active record - this also flags stale servers as inactive
         /// </summary>
         /// <param name="address"></param>
-        public void EnsureActive(string address)
+        /// <param name="computerName"></param>
+        /// <param name="staleServerTimeout"></param>
+        public void EnsureActive(string address, string computerName, TimeSpan staleServerTimeout)
         {
-
             var uow = _uowProvider.GetUnitOfWork();
             using (var repo = _repositoryFactory.CreateServerRegistrationRepository(uow))
             {
-                //NOTE: we cannot use Environment.MachineName as this does not work in medium trust
-                // found this out in CDF a while back: http://clientdependency.codeplex.com/workitem/13191
-
-                var computerName = System.Net.Dns.GetHostName();
                 var query = Query<ServerRegistration>.Builder.Where(x => x.ComputerName.ToUpper() == computerName.ToUpper());
                 var found = repo.GetByQuery(query).ToArray();
                 ServerRegistration server;
@@ -59,10 +56,14 @@ namespace Umbraco.Core.Services
                 }
                 else
                 {
-                    server = new ServerRegistration(address, computerName, DateTime.UtcNow);
+                    server = new ServerRegistration(address, computerName, DateTime.UtcNow)
+                    {
+                        IsActive = true
+                    };
                 }
                 repo.AddOrUpdate(server);
                 uow.Commit();
+                repo.DeactiveStaleServers(staleServerTimeout);
             }
         }
 
@@ -84,6 +85,15 @@ namespace Umbraco.Core.Services
                     repo.AddOrUpdate(server);
                     uow.Commit();
                 }
+            }
+        }
+
+        public void DeactiveStaleServers(TimeSpan staleTimeout)
+        {
+            var uow = _uowProvider.GetUnitOfWork();
+            using (var repo = _repositoryFactory.CreateServerRegistrationRepository(uow))
+            {
+                repo.DeactiveStaleServers(staleTimeout);
             }
         }
 

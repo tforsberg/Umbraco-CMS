@@ -7,7 +7,7 @@ using Umbraco.Core.Sync;
 
 namespace Umbraco.Core.Models
 {
-    internal class ServerRegistration : Entity, IServerAddress, IAggregateRoot
+    public class ServerRegistration : Entity, IServerAddress, IAggregateRoot
     {
         private string _serverAddress;
         private string _computerName;

@@ -273,8 +273,12 @@ namespace Umbraco.Core
                 });
 
             //by default we'll use the standard configuration based sync
+            //ServerRegistrarResolver.Current = new ServerRegistrarResolver(
+            //    new ConfigServerRegistrar()); 
             ServerRegistrarResolver.Current = new ServerRegistrarResolver(
-                new ConfigServerRegistrar()); 
+                new DatabaseServerRegistrar(
+                    new Lazy<ServerRegistrationService>(() => ApplicationContext.Services.ServerRegistrationService),
+                    new DatabaseServerRegistrarOptions()));
 
             //by default (outside of the web) we'll use the default server messenger without
             //supplying a username/password, this will automatically disable distributed calls

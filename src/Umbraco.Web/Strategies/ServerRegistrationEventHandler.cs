@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Web;
+using Newtonsoft.Json;
 using Umbraco.Core;
 using Umbraco.Core.Configuration;
 using Umbraco.Core.Logging;
@@ -13,9 +14,10 @@ using Umbraco.Web.Routing;
 
 namespace Umbraco.Web.Strategies
 {
+
     /// <summary>
     /// This will ensure that the server is automatically registered in the database as an active node 
-    /// on application startup and whenever a back office request occurs.
+    /// on application startup and whenever a back office request occurs if the 
     /// </summary>
     /// <remarks>
     /// We do this on app startup to ensure that the server is in the database but we also do it for the first 'x' times
@@ -27,17 +29,7 @@ namespace Umbraco.Web.Strategies
     /// </remarks>
     public sealed class ServerRegistrationEventHandler : ApplicationEventHandler
     {
-        private static bool _initUpdated = false;
         private static DateTime _lastUpdated = DateTime.MinValue;
-        private static readonly ReaderWriterLockSlim Locker = new ReaderWriterLockSlim();
-
-
-        //protected override void ApplicationStarting(UmbracoApplicationBase umbracoApplication, ApplicationContext applicationContext)
-        //{            
-        //    ServerRegistrarResolver.Current.SetServerRegistrar(
-        //        new DatabaseServerRegistrar(
-        //            new Lazy<ServerRegistrationService>(() => applicationContext.Services.ServerRegistrationService)));
-        //}
 
         /// <summary>
         /// Update the database with this entry and bind to request events
@@ -50,60 +42,63 @@ namespace Umbraco.Web.Strategies
             if (ServerRegistrarResolver.Current.Registrar is DatabaseServerRegistrar)
             {
                 //bind to event
-                UmbracoModule.RouteAttempt += UmbracoModuleRouteAttempt;   
+                UmbracoModule.RouteAttempt += UmbracoModuleRouteAttempt;
             }
         }
 
+        private DatabaseServerRegistrar DatabaseServerRegistrar
+        {
+            get { return (DatabaseServerRegistrar) ServerRegistrarResolver.Current.Registrar; }
+        }
 
-        static void UmbracoModuleRouteAttempt(object sender, RoutableAttemptEventArgs e)
+        void UmbracoModuleRouteAttempt(object sender, RoutableAttemptEventArgs e)
         {
             if (e.HttpContext.Request == null || e.HttpContext.Request.Url == null) return;
 
-            if (e.Outcome == EnsureRoutableOutcome.IsRoutable)
+            switch (e.Outcome)
             {
-                using (var lck = new UpgradeableReadLock(Locker))
-                {
-                    //we only want to do the initial update once
-                    if (!_initUpdated)
+                case EnsureRoutableOutcome.IsRoutable:
+                    PerformUpdateCheck(e);
+                    break;
+                case EnsureRoutableOutcome.NotDocumentRequest:
+                    //so it's not a document request, we'll check if it's a back office request
+                    if (e.HttpContext.Request.Url.IsBackOfficeRequest(HttpRuntime.AppDomainAppVirtualPath))
                     {
-                        lck.UpgradeToWriteLock();
-                        _initUpdated = true;
-                        UpdateServerEntry(e.HttpContext, e.UmbracoContext.Application);
-                        return;
+                        PerformUpdateCheck(e);
                     }
-                }
-            }
-
-            //if it is not a document request, we'll check if it is a back end request
-            if (e.Outcome == EnsureRoutableOutcome.NotDocumentRequest)
-            {
-                //check if this is in the umbraco back office
-                if (e.HttpContext.Request.Url.IsBackOfficeRequest(HttpRuntime.AppDomainAppVirtualPath))
-                {
-                    //yup it's a back office request!
-                    using (var lck = new UpgradeableReadLock(Locker))
-                    {
-                        //we don't want to update if it's not been at least a minute since last time
-                        var isItAMinute = DateTime.Now.Subtract(_lastUpdated).TotalSeconds >= 60;
-                        if (isItAMinute)
-                        {
-                            lck.UpgradeToWriteLock();
-                            _initUpdated = true;
-                            _lastUpdated = DateTime.Now;
-                            UpdateServerEntry(e.HttpContext, e.UmbracoContext.Application);
-                        }
-                    }
-                }
+                    break;
+                case EnsureRoutableOutcome.NotReady:
+                case EnsureRoutableOutcome.NotConfigured:
+                case EnsureRoutableOutcome.NoContent:
+                default:
+                    break;
             }
         }
 
+        private void PerformUpdateCheck(RoutableAttemptEventArgs e)
+        {
+            //we don't want to update if it's not been at least a minute since last time
+            var isItAMinute = DateTime.Now.Subtract(_lastUpdated).TotalSeconds >= DatabaseServerRegistrar.Options.ThrottleSeconds;
+            if (isItAMinute)
+            {
+                _lastUpdated = DateTime.Now;
+                UpdateServerEntry(e.HttpContext, e.UmbracoContext.Application);
+            }
+        }
 
-        private static void UpdateServerEntry(HttpContextBase httpContext, ApplicationContext applicationContext)
+        private void UpdateServerEntry(HttpContextBase httpContext, ApplicationContext applicationContext)
         {
             try
             {
                 var address = httpContext.Request.Url.GetLeftPart(UriPartial.Authority);
-                applicationContext.Services.ServerRegistrationService.EnsureActive(address);
+
+                var computerName = JsonConvert.SerializeObject(new { machineName = NetworkHelper.MachineName, appDomainAppId = HttpRuntime.AppDomainAppId });
+
+                applicationContext.Services.ServerRegistrationService.EnsureActive(
+                    address,
+                    computerName,
+                    DatabaseServerRegistrar.Options.StaleServerTimeout);
+
             }
             catch (Exception e)
             {
