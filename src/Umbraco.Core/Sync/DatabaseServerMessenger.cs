@@ -81,7 +81,7 @@ namespace Umbraco.Core.Sync
         /// <returns></returns>
         protected override bool ShouldMakeDistributedCall(IEnumerable<IServerAddress> servers, ICacheRefresher refresher, MessageType dispatchType)
         {
-            
+
             if (_initialized == false)
             {
                 return false;
@@ -92,11 +92,11 @@ namespace Umbraco.Core.Sync
         }
 
         protected override void PerformDistributedCall(
-            IEnumerable<IServerAddress> servers, 
-            ICacheRefresher refresher, 
-            MessageType dispatchType, 
-            IEnumerable<object> ids = null, 
-            Type idArrayType = null, 
+            IEnumerable<IServerAddress> servers,
+            ICacheRefresher refresher,
+            MessageType dispatchType,
+            IEnumerable<object> ids = null,
+            Type idArrayType = null,
             string jsonPayload = null)
         {
             var msg = new DistributedMessage
@@ -131,7 +131,7 @@ namespace Umbraco.Core.Sync
             // server and it will need to rebuild it's own persisted cache. Currently in that case it is Lucene and the xml
             // cache file.
             LogHelper.Warn<DatabaseServerMessenger>("No last synced Id found, this generally means this is a new server/install. The server will rebuild its caches and indexes and then adjust it's last synced id to the latest found in the database and will start maintaining cache updates based on that id");
-            
+
             //perform rebuilds if specified
             if (_options.RebuildingCallbacks != null)
             {
@@ -140,8 +140,8 @@ namespace Umbraco.Core.Sync
                     callback();
                 }
             }
-            
-            
+
+
             //go get the last id in the db and store it
             var lastId = _appContext.DatabaseContext.Database.ExecuteScalar<int>(
                 "SELECT MAX(id) FROM umbracoCacheInstruction");
@@ -174,52 +174,68 @@ namespace Umbraco.Core.Sync
 
                         using (DisposableTimer.DebugDuration<DatabaseServerMessenger>("Syncing from database..."))
                         {
-                            //get the outstanding items
-
-                            var sql = new Sql().Select("*")
-                                .From<CacheInstructionDto>()
-                                .Where<CacheInstructionDto>(dto => dto.Id > _lastId)
-                                .OrderBy<CacheInstructionDto>(dto => dto.Id);
-
-                            var list = _appContext.DatabaseContext.Database.Fetch<CacheInstructionDto>(sql);
-
-                            if (list.Count > 0)
-                            {
-                               
-                                // TODO: Here we could ignore anything that originated from this server since it will already have processed that
-                                // change locally (see notes in DatabaseServerMessenger.MessageSeversForIdsOrJson ). However, depending on the sequence
-                                // of events, I think this server will still need to process it's own instructions from the database to ensure the correct
-                                // instruction's sequence order is processed. 
-                                //
-                                //  var toProcess = list.Where(x => x.OriginatedFrom != GetOriginatorValue());
-
-                                foreach (var item in list)
-                                {
-                                    try
-                                    {
-                                        var jsonArray = JsonConvert.DeserializeObject<JArray>(item.JsonInstruction);
-                                        UpdateRefreshers(jsonArray);
-                                    }
-                                    catch (JsonException ex)
-                                    {
-                                        LogHelper.Error<DatabaseServerMessenger>("Could not deserialize a distributed cache instruction! Value: " + item.JsonInstruction, ex);
-                                    }
-                                }
-
-                                SaveLastSynced(list.Max(x => x.Id));
-                            }
+                            PerformSyncFromDb();
 
                             //prune old records
-                            _appContext.DatabaseContext.Database.Delete<CacheInstructionDto>("WHERE utcStamp < @pruneDate", new {pruneDate = DateTime.UtcNow.AddDays(_options.DaysToRetainInstructionRecords*-1)});
+                            _appContext.DatabaseContext.Database.Delete<CacheInstructionDto>("WHERE utcStamp < @pruneDate", new { pruneDate = DateTime.UtcNow.AddDays(_options.DaysToRetainInstructionRecords * -1) });
 
                             //reset
                             _syncing = false;
                         }
-                        
                     }
                 }
             }
         }
+
+        /// <summary>
+        /// This checks outstanding cache instructions from the db and processes them
+        /// </summary>
+        /// <remarks>
+        /// This is not thread safe
+        /// </remarks>
+        private void PerformSyncFromDb()
+        {
+            //TODO: We 'could' recurse to ensure that no remaining instructions are pending in the table before proceeding but I don't think that 
+            // would be a good idea since instructions could keep getting added and then all other threads will probably get stuck from serving requests
+            // (depending on what the cache refreshers are doing). I think it's best we do the one time check, process them and continue, if there are 
+            // pending requests after being processed, they'll just be processed on the next poll.
+
+            //get the outstanding items
+
+            var sql = new Sql().Select("*")
+                .From<CacheInstructionDto>()
+                .Where<CacheInstructionDto>(dto => dto.Id > _lastId)
+                .OrderBy<CacheInstructionDto>(dto => dto.Id);
+
+            var list = _appContext.DatabaseContext.Database.Fetch<CacheInstructionDto>(sql);
+
+            if (list.Count > 0)
+            {
+
+                // TODO: Here we could ignore anything that originated from this server since it will already have processed that
+                // change locally (see notes in DatabaseServerMessenger.MessageSeversForIdsOrJson ). However, depending on the sequence
+                // of events, I think this server will still need to process it's own instructions from the database to ensure the correct
+                // instruction's sequence order is processed. 
+                //
+                //  var toProcess = list.Where(x => x.OriginatedFrom != GetOriginatorValue());
+
+                foreach (var item in list)
+                {
+                    try
+                    {
+                        var jsonArray = JsonConvert.DeserializeObject<JArray>(item.JsonInstruction);
+                        UpdateRefreshers(jsonArray);
+                    }
+                    catch (JsonException ex)
+                    {
+                        LogHelper.Error<DatabaseServerMessenger>("Could not deserialize a distributed cache instruction! Value: " + item.JsonInstruction, ex);
+                    }
+                }
+
+                SaveLastSynced(list.Max(x => x.Id));
+            }
+        }
+
 
         internal void UpdateRefreshers(JArray jsonArray)
         {
@@ -287,7 +303,7 @@ namespace Umbraco.Core.Sync
         /// <returns></returns>
         protected string GetOriginatorValue()
         {
-            return JsonConvert.SerializeObject(new {machineName = NetworkHelper.MachineName, appDomainAppId = HttpRuntime.AppDomainAppId});
+            return JsonConvert.SerializeObject(new { machineName = NetworkHelper.MachineName, appDomainAppId = HttpRuntime.AppDomainAppId });
         }
 
         /// <summary>
@@ -309,7 +325,7 @@ namespace Umbraco.Core.Sync
             File.WriteAllText(Path.Combine(tempFolder, HttpRuntime.AppDomainAppId.ReplaceNonAlphanumericChars(string.Empty) + "-lastsynced.txt"), id.ToString(CultureInfo.InvariantCulture));
         }
 
-     
+
         #region Updates the refreshers
         private void RefreshAll(Guid uniqueIdentifier)
         {
@@ -355,7 +371,7 @@ namespace Umbraco.Core.Sync
         {
             var cr = CacheRefreshersResolver.Current.GetById(uniqueIdentifier);
             cr.Remove(Id);
-        } 
+        }
         #endregion
 
         /// <summary>
@@ -379,7 +395,7 @@ namespace Umbraco.Core.Sync
             {
                 LogHelper.Warn<DatabaseServerMessenger>("The app is not configured or cannot connect to the database, this server cannot be initialized with " + typeof(DatabaseServerMessenger) + ", distributed calls will not be enabled for this server");
             }
-            
+
         }
     }
 }
